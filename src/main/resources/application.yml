@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: notion-quiz-generator
+  datasource:
+    url: "jdbc:mysql://localhost:3306/notion_quiz?serverTimezone=Asia/Seoul&useSSL=false&allowPublicKeyRetrieval=true"
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+notion:
+  api:
+    secret: ${NOTION_SECRET}
+    version: "2022-06-28"
+    base-url: "https://api.notion.com/v1"
