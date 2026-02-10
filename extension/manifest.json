@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Notion Quiz Generator",
+  "version": "1.0",
+  "description": "노션 페이지에서 퀴즈를 생성합니다.",
+  "permissions": ["tabs", "activeTab"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "http://localhost:8080/*"
+  ]
+}
