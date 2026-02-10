@@ -9,7 +9,7 @@ import java.util.Map;
 public class NotionService {
 
     private final String NOTION_TOKEN = System.getenv("NOTION_SECRET");
-    private final String NOTION_VERSION = "2022-06-28";
+    private final String NOTION_VERSION = System.getenv("NOTION_VERSION");
 
     public void fetchPageData(String pageId) {
         RestTemplate restTemplate = new RestTemplate();
