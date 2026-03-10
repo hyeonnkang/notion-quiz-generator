@@ -30,8 +30,6 @@ public class NotionService {
         String cursor = null;
 
         do {
-            System.out.println("[NotionService] 블록 조회 요청. blockId=" + blockId +
-                ", cursor=" + (cursor == null ? "null" : cursor));
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + NOTION_TOKEN);
             headers.set("Notion-Version", NOTION_VERSION);
@@ -45,16 +43,12 @@ public class NotionService {
             try {
                 res = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
             } catch (Exception e) {
-                System.out.println("[NotionService] Notion API 호출 실패. blockId=" + blockId +
-                    ", cursor=" + (cursor == null ? "null" : cursor) + ", reason=" + e.getMessage());
                 throw new RuntimeException("ID [" + blockId + "] 의 Notion API 호출에 실패했습니다.", e);
             }
 
             try {
                 JsonNode root = objectMapper.readTree(res.getBody());
                 JsonNode results = root.path("results");
-                System.out.println("[NotionService] 블록 조회 응답. status=" + res.getStatusCode().value() +
-                    ", resultsCount=" + results.size());
 
                 for (JsonNode block : results) {
                     appendPlainText(block, out);
@@ -67,12 +61,8 @@ public class NotionService {
 
                 boolean hasMore = root.path("has_more").asBoolean(false);
                 cursor = hasMore ? root.path("next_cursor").asText(null) : null;
-                System.out.println("[NotionService] 페이지네이션 상태. hasMore=" + hasMore +
-                    ", nextCursor=" + (cursor == null ? "null" : cursor));
 
             } catch (Exception e) {
-                System.out.println("[NotionService] 응답 파싱 실패. blockId=" + blockId +
-                    ", reason=" + e.getMessage());
                 throw new RuntimeException("ID [" + blockId + "] 의 데이터를 가져오는데 실패했습니다.", e);
             }
 
