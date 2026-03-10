@@ -1,17 +1,26 @@
 package com.notionquiz.generator.ai;
 
+import com.notionquiz.generator.service.DocumentChunkService;
 import com.notionquiz.generator.service.NotionService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class QuizGenerationService {
 
     private final NotionService notionService;
+    private final DocumentChunkService documentChunkService;
     private final ChatClient chatClient;
 
-    public QuizGenerationService(NotionService notionService, ChatClient.Builder chatClientBuilder) {
+    public QuizGenerationService(
+        NotionService notionService,
+        DocumentChunkService documentChunkService,
+        ChatClient.Builder chatClientBuilder
+    ) {
         this.notionService = notionService;
+        this.documentChunkService = documentChunkService;
         this.chatClient = chatClientBuilder.build();
     }
 
@@ -32,6 +41,19 @@ public class QuizGenerationService {
         if (pageContent == null || pageContent.isBlank()) {
             throw new RuntimeException("퀴즈 생성에 실패했습니다: 노션 페이지 내용이 비어 있습니다. pageId=" + pageId);
         }
+
+        List<String> chunks = documentChunkService.splitText(pageContent);
+        System.out.println("[QuizGenerationService] 문서 chunking 완료. originalLength=" + pageContent.length() +
+            ", chunkCount=" + chunks.size());
+
+        if (chunks.isEmpty()) {
+            throw new RuntimeException("퀴즈 생성에 실패했습니다: 처리 가능한 문서 chunk가 없습니다. pageId=" + pageId);
+        }
+
+        int usedChunkCount = Math.min(2, chunks.size());
+        String contentForPrompt = String.join("\n\n", chunks.subList(0, usedChunkCount));
+        System.out.println("[QuizGenerationService] chunk 사용 완료. usedChunkCount=" + usedChunkCount +
+            ", inputLength=" + contentForPrompt.length());
 
         String prompt = """
             다음 노션 문서 내용을 기반으로 객관식 퀴즈를 만들어라.
@@ -72,7 +94,7 @@ public class QuizGenerationService {
 
             [노션 문서 내용]
             %s
-            """.formatted(pageContent);
+            """.formatted(contentForPrompt);
 
         try {
             System.out.println("[QuizGenerationService] AI 호출 시작. promptLength=" + prompt.length());
