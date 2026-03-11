@@ -1,5 +1,11 @@
 package com.notionquiz.generator.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.notionquiz.generator.dto.QuizGenerateResponse;
+import com.notionquiz.generator.dto.QuizItemResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
@@ -8,21 +14,26 @@ import java.util.List;
 @Service
 public class QuizService {
 
+    private static final Logger log = LoggerFactory.getLogger(QuizService.class);
+
     private final NotionService notionService;
     private final DocumentChunkService documentChunkService;
     private final ChatClient chatClient;
+    private final ObjectMapper objectMapper;
 
     public QuizService(
         NotionService notionService,
         DocumentChunkService documentChunkService,
-        ChatClient.Builder chatClientBuilder
+        ChatClient.Builder chatClientBuilder,
+        ObjectMapper objectMapper
     ) {
         this.notionService = notionService;
         this.documentChunkService = documentChunkService;
         this.chatClient = chatClientBuilder.build();
+        this.objectMapper = objectMapper;
     }
 
-    public String generateQuiz(String pageId) {
+    public QuizGenerateResponse generateQuiz(String pageId) {
         long startedAt = System.currentTimeMillis();
 
         if (pageId == null || pageId.isBlank()) {
@@ -54,41 +65,20 @@ public class QuizService {
             ", inputLength=" + contentForPrompt.length());
 
         String prompt = """
-            다음 노션 문서 내용을 기반으로 객관식 퀴즈를 만들어라.
+            다음 노션 문서 내용을 기반으로 객관식 퀴즈를 정확히 3개 생성하라.
 
             [중요 규칙]
             1) 반드시 아래 문서 내용에 있는 정보만 사용한다.
             2) 문서에 없는 사실은 절대 만들어내지 않는다.
-            3) 객관식 문제는 정확히 3개를 만든다.
-            4) 각 문제는 아래 형식을 반드시 지킨다.
-               - 문제
-               - 보기 4개
-               - 정답
-
-            [출력 형식]
-            문제 1:
-            보기:
-            1) ...
-            2) ...
-            3) ...
-            4) ...
-            정답: ...
-
-            문제 2:
-            보기:
-            1) ...
-            2) ...
-            3) ...
-            4) ...
-            정답: ...
-
-            문제 3:
-            보기:
-            1) ...
-            2) ...
-            3) ...
-            4) ...
-            정답: ...
+            3) 출력은 반드시 JSON 배열(JSON Array)만 반환한다.
+            4) 설명 문장, 제목, 주석, 마크다운, 코드블록(```)을 절대 포함하지 않는다.
+            5) 배열 각 항목은 아래 스키마를 정확히 따른다.
+               {
+                 "question": "...",
+                 "choices": ["...", "...", "...", "..."],
+                 "answer": "..."
+               }
+            6) choices 는 반드시 문자열 4개여야 하며, answer 는 choices 중 하나와 정확히 일치해야 한다.
 
             [노션 문서 내용]
             %s
@@ -100,13 +90,40 @@ public class QuizService {
             if (response == null || response.isBlank()) {
                 throw new RuntimeException("퀴즈 생성에 실패했습니다: AI 응답이 비어 있습니다.");
             }
-            System.out.println("[QuizService] AI 호출 완료. responseLength=" + response.length() +
+            String normalizedResponse = removeMarkdownCodeBlock(response);
+            List<QuizItemResponse> quizzes;
+            try {
+                quizzes = objectMapper.readValue(normalizedResponse, new TypeReference<List<QuizItemResponse>>() {});
+            } catch (Exception parseException) {
+                log.error("[QuizService] AI 응답 JSON 파싱 실패. rawResponse={}", response, parseException);
+                throw new RuntimeException(
+                    "퀴즈 생성에 실패했습니다: AI 응답을 JSON 배열로 파싱하지 못했습니다. " +
+                        "question/choices(4개)/answer 형식을 확인하세요.",
+                    parseException
+                );
+            }
+
+            QuizGenerateResponse result = new QuizGenerateResponse();
+            result.setPageId(pageId);
+            result.setQuizzes(quizzes);
+
+            System.out.println("[QuizService] AI 호출 및 파싱 완료. responseLength=" + response.length() +
+                ", quizCount=" + quizzes.size() +
                 ", totalElapsed=" + (System.currentTimeMillis() - startedAt) + "ms");
-            return response;
+            return result;
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("퀴즈 생성에 실패했습니다: AI 호출 중 오류가 발생했습니다.", e);
         }
+    }
+
+    private String removeMarkdownCodeBlock(String rawResponse) {
+        String normalized = rawResponse == null ? "" : rawResponse.trim();
+        if (normalized.startsWith("```")) {
+            normalized = normalized.replaceFirst("^```(?:json)?\\s*", "");
+            normalized = normalized.replaceFirst("\\s*```$", "");
+        }
+        return normalized.trim();
     }
 }

@@ -1,6 +1,7 @@
 package com.notionquiz.generator.controller;
 
 import com.notionquiz.generator.service.QuizService;
+import com.notionquiz.generator.dto.QuizGenerateResponse;
 import com.notionquiz.generator.dto.QuizGenerateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -18,11 +19,11 @@ public class QuizController {
     private final QuizService quizService;
 
     @PostMapping("/generate")
-    public String generateQuiz(@RequestBody QuizGenerateRequest request) {
+    public QuizGenerateResponse generateQuiz(@RequestBody QuizGenerateRequest request) {
         String pageId = request == null ? null : request.getPageId();
 
         try {
-            String result = quizService.generateQuiz(pageId);
+            QuizGenerateResponse result = quizService.generateQuiz(pageId);
             return result;
         } catch (RuntimeException e) {
             throw e;
