@@ -21,12 +21,6 @@ public class QuizController {
     @PostMapping("/generate")
     public QuizGenerateResponse generateQuiz(@RequestBody QuizGenerateRequest request) {
         String pageId = request == null ? null : request.getPageId();
-
-        try {
-            QuizGenerateResponse result = quizService.generateQuiz(pageId);
-            return result;
-        } catch (RuntimeException e) {
-            throw e;
-        }
+        return quizService.generateQuiz(pageId);
     }
 }

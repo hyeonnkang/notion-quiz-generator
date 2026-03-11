@@ -20,17 +20,20 @@ public class QuizService {
     private final DocumentChunkService documentChunkService;
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final QuizPersistenceService quizPersistenceService;
 
     public QuizService(
         NotionService notionService,
         DocumentChunkService documentChunkService,
         ChatClient.Builder chatClientBuilder,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        QuizPersistenceService quizPersistenceService
     ) {
         this.notionService = notionService;
         this.documentChunkService = documentChunkService;
         this.chatClient = chatClientBuilder.build();
         this.objectMapper = objectMapper;
+        this.quizPersistenceService = quizPersistenceService;
     }
 
     public QuizGenerateResponse generateQuiz(String pageId) {
@@ -102,6 +105,8 @@ public class QuizService {
                     parseException
                 );
             }
+
+            quizPersistenceService.saveQuizSet(pageId, pageContent, quizzes);
 
             QuizGenerateResponse result = new QuizGenerateResponse();
             result.setPageId(pageId);
