@@ -331,6 +331,7 @@
 **/*.lnk
 
 ### Gradle ###
+**/.gradle-local/
 **/.gradle
 .gradle*
 !src/**/build/
