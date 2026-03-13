@@ -9,5 +9,6 @@ import java.util.List;
 @Setter
 public class QuizGenerateResponse {
     private String pageId;
+    private boolean cached;
     private List<QuizItemResponse> quizzes;
 }

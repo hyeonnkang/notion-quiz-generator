@@ -4,12 +4,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notionquiz.generator.dto.QuizGenerateResponse;
 import com.notionquiz.generator.dto.QuizItemResponse;
+import com.notionquiz.generator.util.HashUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class QuizService {
@@ -52,6 +54,16 @@ public class QuizService {
 
         if (pageContent == null || pageContent.isBlank()) {
             throw new RuntimeException("퀴즈 생성에 실패했습니다: 노션 페이지 내용이 비어 있습니다. pageId=" + pageId);
+        }
+
+        String documentHash = HashUtil.sha256(pageContent);
+        Optional<List<QuizItemResponse>> cachedQuizzes = quizPersistenceService.findCachedQuizzes(pageId, documentHash);
+        if (cachedQuizzes.isPresent()) {
+            log.info("[QuizService] 퀴즈 캐시 반환. pageId={}, cached=true, documentHash={}, totalElapsed={}ms",
+                pageId,
+                documentHash,
+                System.currentTimeMillis() - startedAt);
+            return createResponse(pageId, cachedQuizzes.get(), true);
         }
 
         List<String> chunks = documentChunkService.splitText(pageContent);
@@ -106,12 +118,10 @@ public class QuizService {
                 );
             }
 
-            quizPersistenceService.saveQuizSet(pageId, pageContent, quizzes);
+            quizPersistenceService.saveQuizSet(pageId, documentHash, pageContent, quizzes);
 
-            QuizGenerateResponse result = new QuizGenerateResponse();
-            result.setPageId(pageId);
-            result.setQuizzes(quizzes);
-
+            QuizGenerateResponse result = createResponse(pageId, quizzes, false);
+            log.info("[QuizService] 퀴즈 생성 완료. pageId={}, cached=false, documentHash={}", pageId, documentHash);
             System.out.println("[QuizService] AI 호출 및 파싱 완료. responseLength=" + response.length() +
                 ", quizCount=" + quizzes.size() +
                 ", totalElapsed=" + (System.currentTimeMillis() - startedAt) + "ms");
@@ -130,5 +140,13 @@ public class QuizService {
             normalized = normalized.replaceFirst("\\s*```$", "");
         }
         return normalized.trim();
+    }
+
+    private QuizGenerateResponse createResponse(String pageId, List<QuizItemResponse> quizzes, boolean cached) {
+        QuizGenerateResponse result = new QuizGenerateResponse();
+        result.setPageId(pageId);
+        result.setCached(cached);
+        result.setQuizzes(quizzes);
+        return result;
     }
 }

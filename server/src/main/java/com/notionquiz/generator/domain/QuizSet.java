@@ -27,6 +27,9 @@ public class QuizSet {
     @Column(nullable = false, length = 255)
     private String pageId;
 
+    @Column(length = 64)
+    private String documentHash;
+
     @Lob
     @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String sourceText;
@@ -39,7 +42,12 @@ public class QuizSet {
     private LocalDateTime createdAt;
 
     public QuizSet(String pageId, String sourceText, String quizJson) {
+        this(pageId, null, sourceText, quizJson);
+    }
+
+    public QuizSet(String pageId, String documentHash, String sourceText, String quizJson) {
         this.pageId = pageId;
+        this.documentHash = documentHash;
         this.sourceText = sourceText;
         this.quizJson = quizJson;
     }

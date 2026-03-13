@@ -1,6 +1,7 @@
 package com.notionquiz.generator.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notionquiz.generator.domain.QuizSet;
 import com.notionquiz.generator.dto.QuizItemResponse;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class QuizPersistenceService {
@@ -25,19 +27,27 @@ public class QuizPersistenceService {
         this.objectMapper = objectMapper;
     }
 
+    @Transactional(readOnly = true)
+    public Optional<List<QuizItemResponse>> findCachedQuizzes(String pageId, String documentHash) {
+        return quizSetRepository.findByPageIdAndDocumentHash(pageId, documentHash)
+            .flatMap(quizSet -> parseQuizJson(pageId, documentHash, quizSet));
+    }
+
     @Transactional
-    public void saveQuizSet(String pageId, String sourceText, List<QuizItemResponse> quizzes) {
+    public void saveQuizSet(String pageId, String documentHash, String sourceText, List<QuizItemResponse> quizzes) {
         String quizJson = toQuizJson(pageId, quizzes);
 
         try {
-            QuizSet saved = quizSetRepository.save(new QuizSet(pageId, sourceText, quizJson));
-            log.info("[QuizPersistenceService] 퀴즈 저장 완료. pageId={}, quizSetId={}, quizCount={}",
+            QuizSet saved = quizSetRepository.save(new QuizSet(pageId, documentHash, sourceText, quizJson));
+            log.info("[QuizPersistenceService] 퀴즈 저장 완료. pageId={}, documentHash={}, quizSetId={}, quizCount={}",
                 pageId,
+                documentHash,
                 saved.getId(),
                 quizzes == null ? 0 : quizzes.size());
         } catch (Exception e) {
-            log.error("[QuizPersistenceService] 퀴즈 저장 실패. pageId={}, sourceLength={}, quizJsonLength={}",
+            log.error("[QuizPersistenceService] 퀴즈 저장 실패. pageId={}, documentHash={}, sourceLength={}, quizJsonLength={}",
                 pageId,
+                documentHash,
                 sourceText == null ? 0 : sourceText.length(),
                 quizJson.length(),
                 e);
@@ -54,6 +64,23 @@ public class QuizPersistenceService {
                 quizzes == null ? 0 : quizzes.size(),
                 e);
             throw new RuntimeException("퀴즈 JSON 직렬화에 실패했습니다. pageId=" + pageId, e);
+        }
+    }
+
+    private Optional<List<QuizItemResponse>> parseQuizJson(String pageId, String documentHash, QuizSet quizSet) {
+        try {
+            List<QuizItemResponse> quizzes = objectMapper.readValue(
+                quizSet.getQuizJson(),
+                new TypeReference<List<QuizItemResponse>>() {}
+            );
+            return Optional.of(quizzes);
+        } catch (Exception e) {
+            log.warn("[QuizPersistenceService] 캐시 데이터 파싱 실패. pageId={}, documentHash={}, quizSetId={}",
+                pageId,
+                documentHash,
+                quizSet.getId(),
+                e);
+            return Optional.empty();
         }
     }
 }
