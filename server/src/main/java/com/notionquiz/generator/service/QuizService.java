@@ -1,14 +1,14 @@
 package com.notionquiz.generator.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notionquiz.generator.dto.QuizGenerateResponse;
 import com.notionquiz.generator.dto.QuizItemResponse;
 import com.notionquiz.generator.util.HashUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,29 +21,24 @@ public class QuizService {
     private final NotionService notionService;
     private final DocumentChunkService documentChunkService;
     private final ChatClient chatClient;
-    private final ObjectMapper objectMapper;
     private final QuizPersistenceService quizPersistenceService;
 
     public QuizService(
         NotionService notionService,
         DocumentChunkService documentChunkService,
         ChatClient.Builder chatClientBuilder,
-        ObjectMapper objectMapper,
         QuizPersistenceService quizPersistenceService
     ) {
         this.notionService = notionService;
         this.documentChunkService = documentChunkService;
         this.chatClient = chatClientBuilder.build();
-        this.objectMapper = objectMapper;
         this.quizPersistenceService = quizPersistenceService;
     }
 
     public QuizGenerateResponse generateQuiz(String pageId) {
         long startedAt = System.currentTimeMillis();
 
-        if (pageId == null || pageId.isBlank()) {
-            throw new RuntimeException("퀴즈 생성에 실패했습니다: pageId가 비어 있습니다.");
-        }
+        validatePageId(pageId, "퀴즈 생성");
 
         String pageContent;
         try {
@@ -108,7 +103,7 @@ public class QuizService {
             String normalizedResponse = removeMarkdownCodeBlock(response);
             List<QuizItemResponse> quizzes;
             try {
-                quizzes = objectMapper.readValue(normalizedResponse, new TypeReference<List<QuizItemResponse>>() {});
+                quizzes = quizPersistenceService.parseQuizItemsJson(pageId, normalizedResponse);
             } catch (Exception parseException) {
                 log.error("[QuizService] AI 응답 JSON 파싱 실패. rawResponse={}", response, parseException);
                 throw new RuntimeException(
@@ -133,6 +128,18 @@ public class QuizService {
         }
     }
 
+    public QuizGenerateResponse getLatestQuiz(String pageId) {
+        validatePageId(pageId, "퀴즈 조회");
+
+        List<QuizItemResponse> quizzes = quizPersistenceService.findLatestQuizzes(pageId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "저장된 퀴즈가 없습니다. pageId=" + pageId
+            ));
+
+        return createResponse(pageId, quizzes, true);
+    }
+
     private String removeMarkdownCodeBlock(String rawResponse) {
         String normalized = rawResponse == null ? "" : rawResponse.trim();
         if (normalized.startsWith("```")) {
@@ -140,6 +147,12 @@ public class QuizService {
             normalized = normalized.replaceFirst("\\s*```$", "");
         }
         return normalized.trim();
+    }
+
+    private void validatePageId(String pageId, String action) {
+        if (pageId == null || pageId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, action + "에 실패했습니다: pageId가 비어 있습니다.");
+        }
     }
 
     private QuizGenerateResponse createResponse(String pageId, List<QuizItemResponse> quizzes, boolean cached) {

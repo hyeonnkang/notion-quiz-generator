@@ -5,6 +5,8 @@ import com.notionquiz.generator.dto.QuizGenerateResponse;
 import com.notionquiz.generator.dto.QuizGenerateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,5 +24,10 @@ public class QuizController {
     public QuizGenerateResponse generateQuiz(@RequestBody QuizGenerateRequest request) {
         String pageId = request == null ? null : request.getPageId();
         return quizService.generateQuiz(pageId);
+    }
+
+    @GetMapping("/{pageId}")
+    public QuizGenerateResponse getLatestQuiz(@PathVariable String pageId) {
+        return quizService.getLatestQuiz(pageId);
     }
 }

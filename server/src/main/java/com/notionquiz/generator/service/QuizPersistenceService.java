@@ -30,7 +30,13 @@ public class QuizPersistenceService {
     @Transactional(readOnly = true)
     public Optional<List<QuizItemResponse>> findCachedQuizzes(String pageId, String documentHash) {
         return quizSetRepository.findByPageIdAndDocumentHash(pageId, documentHash)
-            .flatMap(quizSet -> parseQuizJson(pageId, documentHash, quizSet));
+            .flatMap(quizSet -> parseCachedQuizJson(pageId, documentHash, quizSet));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<List<QuizItemResponse>> findLatestQuizzes(String pageId) {
+        return quizSetRepository.findTopByPageIdOrderByCreatedAtDesc(pageId)
+            .map(quizSet -> parseLatestQuizJson(pageId, quizSet));
     }
 
     @Transactional
@@ -67,20 +73,36 @@ public class QuizPersistenceService {
         }
     }
 
-    private Optional<List<QuizItemResponse>> parseQuizJson(String pageId, String documentHash, QuizSet quizSet) {
+    public List<QuizItemResponse> parseQuizItemsJson(String pageId, String quizJson) {
         try {
-            List<QuizItemResponse> quizzes = objectMapper.readValue(
-                quizSet.getQuizJson(),
-                new TypeReference<List<QuizItemResponse>>() {}
-            );
-            return Optional.of(quizzes);
+            return objectMapper.readValue(quizJson, new TypeReference<List<QuizItemResponse>>() {});
         } catch (Exception e) {
+            throw new RuntimeException("퀴즈 JSON 파싱에 실패했습니다. pageId=" + pageId, e);
+        }
+    }
+
+    private Optional<List<QuizItemResponse>> parseCachedQuizJson(String pageId, String documentHash, QuizSet quizSet) {
+        try {
+            return Optional.of(parseQuizItemsJson(pageId, quizSet.getQuizJson()));
+        } catch (RuntimeException e) {
             log.warn("[QuizPersistenceService] 캐시 데이터 파싱 실패. pageId={}, documentHash={}, quizSetId={}",
                 pageId,
                 documentHash,
                 quizSet.getId(),
                 e);
             return Optional.empty();
+        }
+    }
+
+    private List<QuizItemResponse> parseLatestQuizJson(String pageId, QuizSet quizSet) {
+        try {
+            return parseQuizItemsJson(pageId, quizSet.getQuizJson());
+        } catch (RuntimeException e) {
+            log.error("[QuizPersistenceService] 저장된 퀴즈 파싱 실패. pageId={}, quizSetId={}",
+                pageId,
+                quizSet.getId(),
+                e);
+            throw e;
         }
     }
 }
